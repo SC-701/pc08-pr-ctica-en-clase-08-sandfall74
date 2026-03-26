@@ -1,11 +1,13 @@
 using Abstracciones.Interfaces.Reglas;
 using Abstracciones.Modelos;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Text.Json;
 
 namespace Web.Pages.Productos
 {
+    [Authorize]
     public class IndexModel : PageModel
     {
         private readonly IConfiguracion _configuracion;
@@ -17,14 +19,30 @@ namespace Web.Pages.Productos
 
         public async Task OnGet()
         {
+            using var cliente = ObtenerClienteConToken();
             string endpoint = _configuracion.ObtenerMetodo("ApiEndPoints", "ObtenerProductos");
-            var cliente = new HttpClient();
+      
             var solicitud = new HttpRequestMessage(HttpMethod.Get, endpoint);
             var respuesta = await cliente.SendAsync(solicitud);
             respuesta.EnsureSuccessStatusCode();
             var resultado = await respuesta.Content.ReadAsStringAsync();
             var opciones = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             productos = JsonSerializer.Deserialize<List<ProductoResponse>>(resultado, opciones);
+        }
+
+        private HttpClient ObtenerClienteConToken()
+        {
+            var tokenClaim = HttpContext.User.Claims
+                .FirstOrDefault(c => c.Type == "Token");
+            var cliente = new HttpClient();
+            if (tokenClaim != null)
+            {
+                var tokenLimpio = tokenClaim.Value.Replace("Bearer ", "").Trim();
+
+                cliente.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", tokenLimpio);
+            }
+            return cliente;
         }
     }
 }
